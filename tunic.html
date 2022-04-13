@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tunic Translator</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Don't use this in production: -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const STROKE_MAP = {
+          A: [10, 50, 50, 25],
+          B: [90, 50, 50, 25],
+          C: [10, 50, 10, 150],
+          D: [90, 50, 90, 150], // NEVER USED
+          E: [10, 150, 50, 175],
+          F: [90, 150, 50, 175],
+          a: [10, 50, 50, 75],
+          b: [50, 25, 50, 75],
+          c: [90, 50, 50, 75],
+          d: [50, 75, 50, 125],
+          e: [10, 150, 50, 125],
+          f: [50, 125, 50, 175],
+          g: [90, 150, 50, 125],
+      }
+
+      const SOUND_MAP = {
+          ABC: "ah",
+          AC: "aw",
+          EF: "ih",
+          CEF: "eh",
+          CE: "ouh", // As in "lOOk"
+          AB: "uh",
+          ACEF: "ee",
+          ABCE: "oo",
+          BCEF: "er",
+          ABCF: "or", // As in "shORtcut"
+          ABEF: "ar",
+          ACF: "eer", // As in "sORRy"... or "EAR?"
+          A: "ay",
+          B: "eye",
+          E: "oi", // A key is no mere t(?) "toy"?
+          F: "ow", // As in "now"
+          ABCEF: "oh",
+          CF: "air",
+
+          eg: "m",
+          aeg: "n",
+          abcdefg: "ng",
+          cdf: "p",
+          bdg: "b",
+          acdf: "t",
+          bdeg: "d",
+          bcdg: "k",
+          cdfg: "g",
+          bde: "j",
+          adf: "tch", // As in "such"
+          cdef: "f",
+          abdg: "v",
+          abcdf: "th", // As in "thing"
+          bdefg: "th", // As in "the"
+          bcdef: "s",
+          abdfg: "z",
+          acdefg: "sh",
+          abcdeg: "zh?", // As in "uSUally"
+          bdfg: "h",
+          bcdf: "r",
+          abdf: "y",
+          ac: "w",
+          bdf: "l"
+      }
+
+      function Translation({ strokes }) {
+        const vowelStrokes = [...strokes].filter(c => c.match(/[A-F]/)).sort().join('');
+        const vowel = SOUND_MAP[vowelStrokes];
+
+        const consonantStrokes = [...strokes].filter(c => c.match(/[a-g]/)).sort().join('');
+        const consonant = SOUND_MAP[consonantStrokes];
+
+        if ((vowelStrokes && !vowel) || (consonantStrokes.length && !consonant )) {
+            return "UNKNOWN";
+        }
+
+        const reversed = strokes.has('o');
+        return (
+          <div style={{
+            display: "flex",
+            flexDirection: reversed ? "row-reverse" : "row",
+            justifyContent: "space-evenly",
+          }}>
+            {consonant && <span>{consonant}</span>}
+            {vowel && consonant && "+"}
+            {vowel && <span>{vowel}</span>}
+          </div>
+        );
+      }
+
+      function Character({ strokes, current = false }) {
+        const lines = [...strokes].filter(s => s !== 'o').map(s => {
+            const [x1, y1, x2, y2] = STROKE_MAP[s];
+            return <line key={s} stroke={current ? "#A00" : "#000"} strokeLinecap="round" strokeWidth="10" x1={x1} y1={y1} x2={x2} y2={y2} />
+        });
+
+        const reversed = strokes.has('o');
+        return (
+          <div style={{ width: "100px", height: "225px" }}>
+            <svg width="100px" height="200px">
+              {lines}
+              {reversed &&  <circle cx="50" cy="190" r="6" strokeWidth="6" fill="#FFF" stroke={current ? "#A00" : "#000"} />}
+            </svg>
+            <Translation strokes={strokes} reversed={reversed} />
+          </div>
+        );
+      }
+
+      class MyApp extends React.Component {
+          constructor(props) {
+            super(props);
+            this.state = {
+              currentInput: new Set(""),
+              words: [
+                // [new Set('ACEFbcdef'), new Set('bcdg'), new Set('bcdfEF'), new Set('acdf')],
+                // [new Set('bdfCEF'), new Set('bdeCEF'), new Set('aeg'), new Set('bdeg')],
+                [],
+              ],
+            };
+          }
+
+          componentDidMount() {
+            document.addEventListener("keydown", this.handleKey);
+          }
+
+          componentWillUnmount() {
+            document.removeEventListener("keydown", this.handleKey);
+          }
+
+          handleKey = (e) => {
+            e.preventDefault();
+            console.log(e.code);
+
+            switch (e.code) {
+              case "Backspace":
+                this.setState({ currentInput: new Set() });
+                break;
+              case "NumpadAdd":
+              case "Space":
+                this.setState(prevState => {
+                  const words = prevState.words.map(word => [...word]);
+                  words[words.length - 1].push(prevState.currentInput);
+
+                  return {
+                    words,
+                    currentInput: new Set(),
+                  };
+                });
+                break;
+              case "NumpadEnter":
+              case "Enter":
+                this.setState(prevState => {
+                  const words = prevState.words.map(word => [...word]);
+                  words[words.length - 1].push(prevState.currentInput);
+                  words.push([]);
+
+                  return {
+                    words,
+                    currentInput: new Set(),
+                  };
+                });
+                break;
+              case "Numpad7":
+              case "KeyU":
+                this.toggleCharacter(e.shiftKey ? "a" : "A");
+                break;
+              case "Numpad8":
+              case "KeyI":
+                this.toggleCharacter("b");
+                break;
+              case "Numpad9":
+              case "KeyO":
+                this.toggleCharacter(e.shiftKey ? "c" : "B");
+                break;
+              case "Numpad4":
+              case "KeyJ":
+                this.toggleCharacter("C");
+                break;
+              case "Numpad5":
+              case "KeyK":
+                this.toggleCharacter("d");
+                break;
+              case "Numpad6":
+              case "KeyL":
+                this.toggleCharacter("D");
+                break;
+              case "Numpad1":
+              case "KeyM":
+                this.toggleCharacter(e.shiftKey ? "e" : "E");
+                break;
+              case "Numpad2":
+              case "Comma":
+                this.toggleCharacter("f");
+                break;
+              case "Numpad3":
+              case "Period":
+                this.toggleCharacter(e.shiftKey ? "g" : "F");
+                break;
+              case "Numpad0":
+              case "MetaRight":
+                this.toggleCharacter("o");
+                break;
+            }
+          }
+
+          toggleCharacter(character) {
+            const newInput = new Set(this.state.currentInput);
+            newInput.has(character) ? newInput.delete(character) : newInput.add(character);
+            this.setState({ currentInput: newInput });
+          }
+
+          render() {
+            const wordElements = this.state.words.map((word, index) => {
+              const letters = word.map((letter, index) => <Character strokes={letter} key={index} />);
+              return (
+                <div key={index} style={{ display: "flex", flexDirection: "row" }}>
+                  {letters}
+                </div>
+              );
+            });
+
+            return (
+              <div>
+                {wordElements}
+                <div>
+                  <Character strokes={this.state.currentInput} current />
+                </div>
+              </div>
+            );
+          }
+      }
+
+      const container = document.getElementById('root');
+      const root = ReactDOM.createRoot(container);
+      root.render(<MyApp />);
+
+    </script>
+    <!--
+      Note: this page is a great way to try React but it's not suitable for production.
+      It slowly compiles JSX with Babel in the browser and uses a large development build of React.
+
+      Read this section for a production-ready setup with JSX:
+      https://reactjs.org/docs/add-react-to-a-website.html#add-jsx-to-a-project
+
+      In a larger project, you can use an integrated toolchain that includes JSX instead:
+      https://reactjs.org/docs/create-a-new-react-app.html
+
+      You can also use React without JSX, in which case you can remove Babel:
+      https://reactjs.org/docs/react-without-jsx.html
+    -->
+  </body>
+</html>
